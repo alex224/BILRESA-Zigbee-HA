@@ -31,21 +31,41 @@ class Coordinator:
         pass
 
 
-async def check():
+def load_setup():
     source = Path("custom_components/bilresa_remote/__init__.py").read_text()
     tree = ast.parse(source)
-    func = next(n for n in tree.body if isinstance(n, ast.AsyncFunctionDef) and n.name == "_async_setup_remote")
-    module = ast.Module(body=[ast.ImportFrom(module="__future__", names=[ast.alias(name="annotations")], level=0), func], type_ignores=[])
+    func = next(
+        n
+        for n in tree.body
+        if isinstance(n, ast.AsyncFunctionDef) and n.name == "_async_setup_remote"
+    )
+    module = ast.Module(
+        body=[
+            ast.ImportFrom(module="__future__", names=[ast.alias(name="annotations")], level=0),
+            func,
+        ],
+        type_ignores=[],
+    )
+    return compile(ast.fix_missing_locations(module), "integration", "exec")
+
+
+async def check(compiled):
     devices = [{"ieee_address": "0x1234", "friendly_name": "IKEA Bilresa grün"}]
 
     async def fetch(hass, base_topic):
         return devices
 
-    env = {"RemoteConfig": Config, "replace": replace, "async_fetch_devices": fetch,
-           "Z2MError": RuntimeError, "ConfigEntryNotReady": NotReady,
-           "ModeResolver": lambda *a, **kw: None, "BilresaCoordinator": Coordinator,
-           "RemoteRuntime": lambda **kw: SimpleNamespace(**kw)}
-    exec(compile(ast.fix_missing_locations(module), "integration", "exec"), env)
+    env = {
+        "RemoteConfig": Config,
+        "replace": replace,
+        "async_fetch_devices": fetch,
+        "Z2MError": RuntimeError,
+        "ConfigEntryNotReady": NotReady,
+        "ModeResolver": lambda *a, **kw: None,
+        "BilresaCoordinator": Coordinator,
+        "RemoteRuntime": lambda **kw: SimpleNamespace(**kw),
+    }
+    exec(compiled, env)
     subentry = SimpleNamespace(data={}, subentry_id="id", title="remote")
     result = await env["_async_setup_remote"](None, subentry, "zigbee2mqtt", None)
     assert result.ieee == "0x1234"
@@ -60,4 +80,4 @@ async def check():
     print("Topic resolution and missing-device retry: OK")
 
 
-asyncio.run(check())
+asyncio.run(check(load_setup()))

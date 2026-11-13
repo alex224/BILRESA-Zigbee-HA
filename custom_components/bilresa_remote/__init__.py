@@ -272,9 +272,7 @@ async def _async_setup_remote(
         devices = await async_fetch_devices(hass, base_topic)
     except Z2MError as err:
         raise ConfigEntryNotReady("Unable to resolve the Zigbee2MQTT device topic") from err
-    device = next(
-        (item for item in devices if item.get("ieee_address") == config.remote_id), None
-    )
+    device = next((item for item in devices if item.get("ieee_address") == config.remote_id), None)
     if device is None or not device.get("friendly_name"):
         raise ConfigEntryNotReady(f"Zigbee2MQTT device {config.remote_id} not found")
     config = replace(config, topic_name=str(device["friendly_name"]))
