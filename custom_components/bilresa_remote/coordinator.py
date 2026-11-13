@@ -134,6 +134,7 @@ class RemoteConfig:
     remote_id: str
     name: str
     base_topic: str = DEFAULT_BASE_TOPIC
+    topic_name: str | None = None
     color: str = DEFAULT_COLOR
     mode: ModeConfig = field(default_factory=ModeConfig)
     split_single_click: bool = DEFAULT_SPLIT_SINGLE_CLICK
@@ -180,7 +181,7 @@ class RemoteConfig:
     @property
     def topic(self) -> str:
         """Return the MQTT topic of this remote."""
-        return f"{self.base_topic}/{self.remote_id}"
+        return f"{self.base_topic}/{self.topic_name or self.remote_id}"
 
 
 # --------------------------------------------------------------------------- #

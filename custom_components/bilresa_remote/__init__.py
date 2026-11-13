@@ -24,7 +24,7 @@ from __future__ import annotations
 import logging
 from collections import deque
 from collections.abc import Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from inspect import isawaitable
 from pathlib import Path
 from typing import Any, Final
@@ -67,6 +67,7 @@ from .dispatcher import BilresaDispatcher, remote_ieee, remote_name, remote_sube
 from .mode import BilresaModeStore, ModeResolver, async_get_mode_store
 from .panel import async_register_panel, async_unregister_panel
 from .websocket import async_register_websocket_api
+from .z2m import Z2MError, async_fetch_devices
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -267,6 +268,17 @@ async def _async_setup_remote(
         _LOGGER.error("Skipping remote %s: %s", subentry.title, err)
         return None
 
+    try:
+        devices = await async_fetch_devices(hass, base_topic)
+    except Z2MError as err:
+        raise ConfigEntryNotReady("Unable to resolve the Zigbee2MQTT device topic") from err
+    device = next(
+        (item for item in devices if item.get("ieee_address") == config.remote_id), None
+    )
+    if device is None or not device.get("friendly_name"):
+        raise ConfigEntryNotReady(f"Zigbee2MQTT device {config.remote_id} not found")
+    config = replace(config, topic_name=str(device["friendly_name"]))
+
     resolver = ModeResolver(hass, config.remote_id, config.mode, store=store)
     coordinator = BilresaCoordinator(hass, config, mode_resolver=resolver)
     try:
@@ -434,6 +446,7 @@ async def _async_update_listener(hass: HomeAssistant, entry: BilresaConfigEntry)
         except ValueError as err:
             _LOGGER.error("Ignoring broken update of remote %s: %s", runtime.name, err)
             continue
+        config = replace(config, topic_name=runtime.config.topic_name)
         runtime.config = config
         runtime.name = config.name
         runtime.coordinator.async_update_config(config)
